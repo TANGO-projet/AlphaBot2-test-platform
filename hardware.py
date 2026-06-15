@@ -37,39 +37,45 @@ def _is_raspberry_pi() -> bool:
     return False
 
 
-def _has_gpio_access() -> bool:
-    """Check whether the current user can access GPIO memory."""
-    # Modern Raspberry Pi OS exposes /dev/gpiomem for non-root GPIO access.
+def _has_dev_access(path: str) -> bool:
     try:
-        return os.access("/dev/gpiomem", os.R_OK | os.W_OK)
+        return os.access(path, os.R_OK | os.W_OK)
     except Exception:
         return False
 
 
 FORCE_MOCK = os.environ.get("ALPHABOT_MOCK", "").lower() in ("1", "true", "yes")
+FORCE_NEOPIXEL = os.environ.get("ALPHABOT_FORCE_NEOPIXEL", "").lower() in ("1", "true", "yes")
 IS_RPI = _is_raspberry_pi() and not FORCE_MOCK
-GPIO_AVAILABLE = IS_RPI and _has_gpio_access() and not FORCE_MOCK
+GPIO_AVAILABLE = IS_RPI and _has_dev_access("/dev/gpiomem") and not FORCE_MOCK
+I2C_AVAILABLE = IS_RPI and _has_dev_access("/dev/i2c-1") and not FORCE_MOCK
 
-# rpi_ws281x uses DMA and historically needs /dev/mem access.  Be conservative
-# and only enable the real NeoPixel driver when /dev/mem is writable.
-def _has_mem_access() -> bool:
-    try:
-        return os.access("/dev/mem", os.R_OK | os.W_OK)
-    except Exception:
-        return False
-
-
-NEOPIXEL_AVAILABLE = GPIO_AVAILABLE and _has_mem_access()
+# rpi_ws281x uses DMA and historically needs /dev/mem access.  We enable the
+# real driver only when /dev/mem is writable, or when explicitly forced.
+NEOPIXEL_AVAILABLE = GPIO_AVAILABLE and (_has_dev_access("/dev/mem") or FORCE_NEOPIXEL)
 
 if FORCE_MOCK:
     print("[AlphaBot2] ALPHABOT_MOCK=1 set: using mock hardware.", file=sys.stderr)
-elif IS_RPI and not GPIO_AVAILABLE:
-    print(
-        "[AlphaBot2] Running on Raspberry Pi but no GPIO access (/dev/gpiomem). "
-        "Using mock hardware to avoid crashes. "
-        "Add your user to the 'gpio' group (or run with sudo) for real hardware.",
-        file=sys.stderr,
-    )
+elif IS_RPI:
+    if not GPIO_AVAILABLE:
+        print(
+            "[AlphaBot2] No GPIO access (/dev/gpiomem). "
+            "Add your user to the 'gpio' group or run with sudo.",
+            file=sys.stderr,
+        )
+    if not I2C_AVAILABLE:
+        print(
+            "[AlphaBot2] No I2C access (/dev/i2c-1). "
+            "Add your user to the 'i2c' group or run with sudo. "
+            "Pan/tilt servos will not move.",
+            file=sys.stderr,
+        )
+    if GPIO_AVAILABLE and not NEOPIXEL_AVAILABLE:
+        print(
+            "[AlphaBot2] NeoPixel disabled (no /dev/mem access). "
+            "Run with sudo or set ALPHABOT_FORCE_NEOPIXEL=1 to try anyway.",
+            file=sys.stderr,
+        )
 
 # ---------------------------------------------------------------------------
 # GPIO abstraction
@@ -153,10 +159,10 @@ except Exception:
 # ---------------------------------------------------------------------------
 
 try:
-    if GPIO_AVAILABLE:
+    if I2C_AVAILABLE:
         import smbus
     else:
-        raise ImportError("GPIO not available: using mock SMBus")
+        raise ImportError("I2C not available: using mock SMBus")
 except Exception:
     smbus = None  # type: ignore
 
