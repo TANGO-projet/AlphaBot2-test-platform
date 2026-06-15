@@ -45,14 +45,13 @@ def _has_dev_access(path: str) -> bool:
 
 
 FORCE_MOCK = os.environ.get("ALPHABOT_MOCK", "").lower() in ("1", "true", "yes")
-FORCE_NEOPIXEL = os.environ.get("ALPHABOT_FORCE_NEOPIXEL", "").lower() in ("1", "true", "yes")
 IS_RPI = _is_raspberry_pi() and not FORCE_MOCK
 GPIO_AVAILABLE = IS_RPI and _has_dev_access("/dev/gpiomem") and not FORCE_MOCK
 I2C_AVAILABLE = IS_RPI and _has_dev_access("/dev/i2c-1") and not FORCE_MOCK
 
-# rpi_ws281x uses DMA and historically needs /dev/mem access.  We enable the
-# real driver only when /dev/mem is writable, or when explicitly forced.
-NEOPIXEL_AVAILABLE = GPIO_AVAILABLE and (_has_dev_access("/dev/mem") or FORCE_NEOPIXEL)
+# rpi_ws281x needs GPIO access.  We enable the real driver whenever GPIO is
+# available; if it later fails at runtime, the LED module falls back to mock.
+NEOPIXEL_AVAILABLE = GPIO_AVAILABLE
 
 if FORCE_MOCK:
     print("[AlphaBot2] ALPHABOT_MOCK=1 set: using mock hardware.", file=sys.stderr)
@@ -68,12 +67,6 @@ elif IS_RPI:
             "[AlphaBot2] No I2C access (/dev/i2c-1). "
             "Add your user to the 'i2c' group or run with sudo. "
             "Pan/tilt servos will not move.",
-            file=sys.stderr,
-        )
-    if GPIO_AVAILABLE and not NEOPIXEL_AVAILABLE:
-        print(
-            "[AlphaBot2] NeoPixel disabled (no /dev/mem access). "
-            "Run with sudo or set ALPHABOT_FORCE_NEOPIXEL=1 to try anyway.",
             file=sys.stderr,
         )
 
@@ -214,7 +207,7 @@ try:
         NeoPixel = _Adafruit_NeoPixel
         Color = _Color
     else:
-        raise ImportError("NeoPixel not available: using mock")
+        raise ImportError("GPIO not available: using mock NeoPixel")
 except Exception:
     @dataclass
     class _MockColor:
