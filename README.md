@@ -71,7 +71,7 @@ pip install opencv-python-headless numpy  # optional camera backend
 
 ## Permissions on Raspberry Pi
 
-Real GPIO/NeoPixel hardware needs appropriate permissions. If you see `Can't open /dev/mem: Permission denied` or a segmentation fault, your user does not have hardware access.
+Real GPIO/NeoPixel/I2C hardware needs appropriate permissions. If you see `Can't open /dev/mem: Permission denied` or a segmentation fault, your user does not have hardware access.
 
 ### Quick fix
 
@@ -90,17 +90,9 @@ sudo usermod -a -G gpio,i2c $USER
 ```
 
 Notes:
-* `RPi.GPIO` uses `/dev/gpiomem`, which the `gpio` group can access.
-* `rpi_ws281x` (WS2812 LEDs) uses DMA and historically needs `/dev/mem`, so it may still require `sudo` unless your system is configured to allow non-root DMA.
+* `RPi.GPIO` and `rpi_ws281x` (WS2812 LEDs) use `/dev/gpiomem`, which the `gpio` group can access.
 * Pan/tilt servos use I2C (`/dev/i2c-1`), which the `i2c` group can access.
-
-### Force real NeoPixel without /dev/mem check
-
-If you are sure your setup supports non-root NeoPixels, you can bypass the safety check:
-
-```bash
-ALPHABOT_FORCE_NEOPIXEL=1 python run.py --host 0.0.0.0 --port 5000
-```
+* If you still see `/dev/mem` errors from `rpi_ws281x`, run with `sudo`.
 
 ### Force mock mode
 
