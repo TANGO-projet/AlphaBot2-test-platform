@@ -52,12 +52,9 @@ On the Raspberry Pi:
 sudo apt update
 sudo apt install python3-pip python3-venv python3-smbus i2c-tools
 
-# Optional but recommended for NeoPixels
-sudo pip3 install rpi_ws281x RPi.GPIO
-
 # Camera (choose the one matching your setup)
 # - Official Raspberry Pi camera module:
-sudo apt install -y python3-picamera2
+sudo apt install -y python3-picamera2 libcap-dev
 # - Or USB webcam support via OpenCV:
 pip install opencv-python-headless numpy
 
@@ -65,7 +62,41 @@ pip install opencv-python-headless numpy
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+
+# Optional but recommended for NeoPixels
+pip install rpi_ws281x RPi.GPIO
+
 pip install opencv-python-headless numpy  # optional camera backend
+```
+
+## Permissions on Raspberry Pi
+
+Real GPIO/NeoPixel hardware needs appropriate permissions. If you see `Can't open /dev/mem: Permission denied` or a segmentation fault, your user does not have hardware access.
+
+### Quick fix
+
+Run with `sudo` (simplest, but not recommended long-term):
+
+```bash
+sudo $(which python) run.py --host 0.0.0.0 --port 5000
+```
+
+### Recommended fix
+
+Add your user to the `gpio` and `i2c` groups, then log out and back in (or reboot):
+
+```bash
+sudo usermod -a -G gpio,i2c $USER
+```
+
+Note: `RPi.GPIO` uses `/dev/gpiomem`, which the `gpio` group can access. `rpi_ws281x` (WS2812 LEDs) uses DMA and historically needs `/dev/mem`, so it may still require `sudo` unless your system is configured to allow non-root DMA.
+
+### Force mock mode
+
+To test the web UI without touching real hardware, run:
+
+```bash
+ALPHABOT_MOCK=1 python run.py --host 0.0.0.0 --port 5000
 ```
 
 ## Running
