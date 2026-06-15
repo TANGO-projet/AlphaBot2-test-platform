@@ -59,30 +59,41 @@ class Camera:
         forced_index = os.environ.get("ALPHABOT_CAMERA_INDEX", "")
 
         # 1) Try picamera2 first on Raspberry Pi (unless OpenCV is forced).
-        if forced_backend in ("", "picamera2") and HAVE_PICAMERA2:
-            try:
-                self._picam = Picamera2()
-                cfg = self._picam.create_video_configuration(
-                    main={"size": (width, height), "format": "RGB888"}
-                )
-                self._picam.configure(cfg)
-                self._picam.start()
-                # Verify we can actually grab a frame.
-                self._picam.capture_array()
-                self._source = "picamera2"
-                time.sleep(0.2)
-            except Exception as exc:
-                err = f"picamera2 failed: {exc}"
+        if forced_backend in ("", "picamera2"):
+            if not HAVE_PICAMERA2:
+                err = "picamera2 is not installed (try: sudo apt install python3-picamera2)"
                 print(f"[Camera] {err}")
                 self.error = err
+                if forced_backend == "picamera2":
+                    # User explicitly asked for picamera2; don't silently fall back.
+                    print("[Camera] Using mock test pattern.")
+                    self._start_loop()
+                    return
+            else:
                 try:
-                    if self._picam:
-                        self._picam.stop()
-                except Exception:
-                    pass
-                self._picam = None
+                    self._picam = Picamera2()
+                    cfg = self._picam.create_video_configuration(
+                        main={"size": (width, height), "format": "RGB888"}
+                    )
+                    self._picam.configure(cfg)
+                    self._picam.start()
+                    # Verify we can actually grab a frame.
+                    self._picam.capture_array()
+                    self._source = "picamera2"
+                    time.sleep(0.2)
+                except Exception as exc:
+                    err = f"picamera2 failed: {exc}"
+                    print(f"[Camera] {err}")
+                    self.error = err
+                    try:
+                        if self._picam:
+                            self._picam.stop()
+                    except Exception:
+                        pass
+                    self._picam = None
 
         # 2) Fall back to OpenCV (USB webcam / desktop / Pi without picamera2).
+        #    Skip if the user explicitly asked for picamera2 and it failed.
         if self._source == "mock" and forced_backend in ("", "opencv") and HAVE_CV2:
             indices = []
             if forced_index:
@@ -120,7 +131,10 @@ class Camera:
         if self._source == "mock":
             print("[Camera] Using mock test pattern.")
 
-        # Start capture thread.
+        self._start_loop()
+
+    def _start_loop(self):
+        """Start the background capture thread."""
         self._thread = threading.Thread(target=self._capture_loop, daemon=True)
         self._thread.start()
 
