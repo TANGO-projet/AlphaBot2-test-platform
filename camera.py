@@ -73,7 +73,7 @@ class Camera:
                 try:
                     self._picam = Picamera2()
                     cfg = self._picam.create_video_configuration(
-                        main={"size": (width, height), "format": "RGB888"}
+                        main={"size": (width, height), "format": "BGR888"}
                     )
                     self._picam.configure(cfg)
                     self._picam.start()
