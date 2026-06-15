@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Callable, List, Optional
 
 # ---------------------------------------------------------------------------
-# Platform detection
+# Platform / permission detection
 # ---------------------------------------------------------------------------
 
 def _is_raspberry_pi() -> bool:
@@ -36,15 +36,51 @@ def _is_raspberry_pi() -> bool:
         pass
     return False
 
-IS_RPI = _is_raspberry_pi()
+
+def _has_gpio_access() -> bool:
+    """Check whether the current user can access GPIO memory."""
+    # Modern Raspberry Pi OS exposes /dev/gpiomem for non-root GPIO access.
+    try:
+        return os.access("/dev/gpiomem", os.R_OK | os.W_OK)
+    except Exception:
+        return False
+
+
+FORCE_MOCK = os.environ.get("ALPHABOT_MOCK", "").lower() in ("1", "true", "yes")
+IS_RPI = _is_raspberry_pi() and not FORCE_MOCK
+GPIO_AVAILABLE = IS_RPI and _has_gpio_access() and not FORCE_MOCK
+
+# rpi_ws281x uses DMA and historically needs /dev/mem access.  Be conservative
+# and only enable the real NeoPixel driver when /dev/mem is writable.
+def _has_mem_access() -> bool:
+    try:
+        return os.access("/dev/mem", os.R_OK | os.W_OK)
+    except Exception:
+        return False
+
+
+NEOPIXEL_AVAILABLE = GPIO_AVAILABLE and _has_mem_access()
+
+if FORCE_MOCK:
+    print("[AlphaBot2] ALPHABOT_MOCK=1 set: using mock hardware.", file=sys.stderr)
+elif IS_RPI and not GPIO_AVAILABLE:
+    print(
+        "[AlphaBot2] Running on Raspberry Pi but no GPIO access (/dev/gpiomem). "
+        "Using mock hardware to avoid crashes. "
+        "Add your user to the 'gpio' group (or run with sudo) for real hardware.",
+        file=sys.stderr,
+    )
 
 # ---------------------------------------------------------------------------
 # GPIO abstraction
 # ---------------------------------------------------------------------------
 
 try:
-    import RPi.GPIO as _GPIO
-    GPIO = _GPIO
+    if GPIO_AVAILABLE:
+        import RPi.GPIO as _GPIO
+        GPIO = _GPIO
+    else:
+        raise ImportError("GPIO not available: using mock")
 except Exception:
     # Mock GPIO implementation
     class _MockGPIO:
@@ -117,7 +153,10 @@ except Exception:
 # ---------------------------------------------------------------------------
 
 try:
-    import smbus
+    if GPIO_AVAILABLE:
+        import smbus
+    else:
+        raise ImportError("GPIO not available: using mock SMBus")
 except Exception:
     smbus = None  # type: ignore
 
@@ -164,9 +203,12 @@ class SMBus:
 # ---------------------------------------------------------------------------
 
 try:
-    from rpi_ws281x import Adafruit_NeoPixel as _Adafruit_NeoPixel, Color as _Color
-    NeoPixel = _Adafruit_NeoPixel
-    Color = _Color
+    if NEOPIXEL_AVAILABLE:
+        from rpi_ws281x import Adafruit_NeoPixel as _Adafruit_NeoPixel, Color as _Color
+        NeoPixel = _Adafruit_NeoPixel
+        Color = _Color
+    else:
+        raise ImportError("NeoPixel not available: using mock")
 except Exception:
     @dataclass
     class _MockColor:
