@@ -89,7 +89,18 @@ Add your user to the `gpio` and `i2c` groups, then log out and back in (or reboo
 sudo usermod -a -G gpio,i2c $USER
 ```
 
-Note: `RPi.GPIO` uses `/dev/gpiomem`, which the `gpio` group can access. `rpi_ws281x` (WS2812 LEDs) uses DMA and historically needs `/dev/mem`, so it may still require `sudo` unless your system is configured to allow non-root DMA.
+Notes:
+* `RPi.GPIO` uses `/dev/gpiomem`, which the `gpio` group can access.
+* `rpi_ws281x` (WS2812 LEDs) uses DMA and historically needs `/dev/mem`, so it may still require `sudo` unless your system is configured to allow non-root DMA.
+* Pan/tilt servos use I2C (`/dev/i2c-1`), which the `i2c` group can access.
+
+### Force real NeoPixel without /dev/mem check
+
+If you are sure your setup supports non-root NeoPixels, you can bypass the safety check:
+
+```bash
+ALPHABOT_FORCE_NEOPIXEL=1 python run.py --host 0.0.0.0 --port 5000
+```
 
 ### Force mock mode
 
