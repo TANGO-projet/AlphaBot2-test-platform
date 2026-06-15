@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AlphaBot2 Test Platform</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>AlphaBot2 Test Platform</h1>
+        <p>Modern Python 3 webapp replacing the original WaveShare examples</p>
+        <span id="connection" class="badge">connecting…</span>
+    </header>
+
+    <main class="grid">
+        <!-- Camera -->
+        <section class="card wide">
+            <h2>Camera Stream</h2>
+            <img id="camera" src="/api/video" alt="AlphaBot2 camera" width="640" height="480">
+            <p class="hint" id="camera-info">Waiting for camera…</p>
+        </section>
+
+        <!-- Manual control -->
+        <section class="card">
+            <h2>Manual Drive</h2>
+            <div class="dpad" id="dpad">
+                <button data-dir="forward" class="arrow up">▲</button>
+                <button data-dir="left" class="arrow left">◀</button>
+                <button data-dir="stop" class="arrow center">●</button>
+                <button data-dir="right" class="arrow right">▶</button>
+                <button data-dir="backward" class="arrow down">▼</button>
+            </div>
+            <label>
+                Speed
+                <input type="range" id="speed" min="0" max="100" value="50">
+                <span id="speed-val">50</span>%
+            </label>
+        </section>
+
+        <!-- Servo -->
+        <section class="card">
+            <h2>Pan / Tilt</h2>
+            <div class="dpad small">
+                <button data-servo="up" class="arrow up">▲</button>
+                <button data-servo="left" class="arrow left">◀</button>
+                <button data-servo="center" class="arrow center">◎</button>
+                <button data-servo="right" class="arrow right">▶</button>
+                <button data-servo="down" class="arrow down">▼</button>
+            </div>
+            <div class="servo-sliders">
+                <label>Pan <input type="range" id="pan" min="500" max="2500" value="1500"></label>
+                <label>Tilt <input type="range" id="tilt" min="500" max="2500" value="1500"></label>
+            </div>
+        </section>
+
+        <!-- RGB LEDs -->
+        <section class="card">
+            <h2>RGB LEDs</h2>
+            <div class="color-row">
+                <input type="color" id="color-picker" value="#ffffff">
+                <button id="led-off">Off</button>
+            </div>
+            <div class="modes">
+                <button data-mode="static" class="mode active">Static</button>
+                <button data-mode="breath" class="mode">Breath</button>
+                <button data-mode="flash" class="mode">Flash</button>
+                <button data-mode="rainbow" class="mode">Rainbow</button>
+            </div>
+            <label>
+                Brightness
+                <input type="range" id="brightness" min="0" max="255" value="255">
+            </label>
+        </section>
+
+        <!-- Sensors -->
+        <section class="card telemetry">
+            <h2>Telemetry</h2>
+            <div class="metric">
+                <span class="label">Ultrasonic</span>
+                <span class="value" id="dist">--</span> cm
+            </div>
+            <div class="metric">
+                <span class="label">IR Obstacle L</span>
+                <span class="value led" id="ir-l">●</span>
+            </div>
+            <div class="metric">
+                <span class="label">IR Obstacle R</span>
+                <span class="value led" id="ir-r">●</span>
+            </div>
+            <div class="metric">
+                <span class="label">Line position</span>
+                <span class="value" id="line-pos">--</span>
+            </div>
+            <div class="bar-chart" id="line-bars"></div>
+            <div class="metric">
+                <span class="label">IR Remote</span>
+                <span class="value" id="ir-key">--</span>
+            </div>
+        </section>
+
+        <!-- Autonomous demos -->
+        <section class="card wide">
+            <h2>Autonomous Demos</h2>
+            <div class="demo-controls">
+                <button data-demo="idle" class="demo active">Stop / Idle</button>
+                <button data-demo="line_follow" class="demo">Line Follow</button>
+                <button data-demo="ultrasonic_avoid" class="demo">Ultrasonic Avoid</button>
+                <button data-demo="infrared_avoid" class="demo">Infrared Avoid</button>
+                <button id="calibrate">Calibrate Line Sensor</button>
+            </div>
+            <p class="hint">
+                Current demo: <strong id="current-demo">idle</strong>
+                <span id="calib-result"></span>
+            </p>
+        </section>
+
+        <!-- Buzzer -->
+        <section class="card">
+            <h2>Buzzer</h2>
+            <button id="buzzer-on">Beep ON</button>
+            <button id="buzzer-off">Beep OFF</button>
+        </section>
+
+        <!-- Status -->
+        <section class="card wide">
+            <h2>Status</h2>
+            <pre id="status">Waiting for telemetry…</pre>
+        </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
