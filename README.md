@@ -117,6 +117,58 @@ You can also specify host/port:
 python run.py --host 0.0.0.0 --port 8080
 ```
 
+## Camera troubleshooting
+
+If the web UI shows `Source: mock`, the camera backend failed. The error message under the stream will tell you why.
+
+### Official Raspberry Pi camera module
+
+Make sure the camera interface is enabled:
+
+```bash
+sudo raspi-config
+# Interface Options → Camera → Yes
+```
+
+Install picamera2 (Bookworm / Bullseye):
+
+```bash
+sudo apt install -y python3-picamera2
+```
+
+Then run the app. If picamera2 still fails, test it standalone:
+
+```bash
+python3 -c "from picamera2 import Picamera2; p=Picamera2(); p.start(); p.capture_array(); print('OK')"
+```
+
+### USB webcam
+
+If you use a USB webcam, install OpenCV:
+
+```bash
+pip install opencv-python-headless numpy
+```
+
+The app will automatically try camera indices 0-3. You can force a specific index:
+
+```bash
+ALPHABOT_CAMERA_INDEX=1 python run.py --host 0.0.0.0 --port 5000
+```
+
+### Force a specific backend
+
+```bash
+# Force picamera2
+ALPHABOT_CAMERA_BACKEND=picamera2 python run.py
+
+# Force OpenCV with a specific index
+ALPHABOT_CAMERA_BACKEND=opencv ALPHABOT_CAMERA_INDEX=0 python run.py
+
+# Force mock/test pattern
+ALPHABOT_CAMERA_BACKEND=mock python run.py
+```
+
 ## Project layout
 
 ```
