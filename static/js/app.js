@@ -1,5 +1,25 @@
 const API = "/api";
 
+// ---------------------------------------------------------------------------
+// Keyboard mode: arrow keys can control either drive or pan/tilt.
+// Click the center button of a D-pad to map the keyboard to it.
+// ---------------------------------------------------------------------------
+let keyboardMode = "drive"; // 'drive' | 'servo'
+const pressedKeys = new Set();
+
+function setKeyboardMode(mode) {
+    keyboardMode = mode;
+    const driveEl = document.getElementById("drive-kb-mode");
+    const servoEl = document.getElementById("servo-kb-mode");
+    if (mode === "drive") {
+        driveEl.classList.remove("inactive");
+        servoEl.classList.add("inactive");
+    } else {
+        driveEl.classList.add("inactive");
+        servoEl.classList.remove("inactive");
+    }
+}
+
 async function post(path, body = {}) {
     const res = await fetch(API + path, {
         method: "POST",
@@ -16,7 +36,12 @@ async function post(path, body = {}) {
 const dpad = document.getElementById("dpad");
 for (const btn of dpad.querySelectorAll("button")) {
     const send = (dir) => post("/move", { direction: dir });
-    const down = () => send(btn.dataset.dir);
+    const down = () => {
+        if (btn.dataset.dir === "stop") {
+            setKeyboardMode("drive");
+        }
+        send(btn.dataset.dir);
+    };
     const up = () => send("stop");
     btn.addEventListener("mousedown", down);
     btn.addEventListener("mouseup", up);
@@ -41,7 +66,12 @@ speedInput.addEventListener("input", () => {
 const servoPad = document.querySelector(".dpad.small");
 for (const btn of servoPad.querySelectorAll("button")) {
     const send = (dir) => post("/servo", { direction: dir });
-    const down = () => send(btn.dataset.servo);
+    const down = () => {
+        if (btn.dataset.servo === "center") {
+            setKeyboardMode("servo");
+        }
+        send(btn.dataset.servo);
+    };
     const up = () => send("stop");
     btn.addEventListener("mousedown", down);
     btn.addEventListener("mouseup", up);
@@ -159,6 +189,39 @@ async function pollTelemetry() {
         console.error(err);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Keyboard control
+// ---------------------------------------------------------------------------
+const KEY_MAP = {
+    ArrowUp: { drive: "forward", servo: "up" },
+    ArrowDown: { drive: "backward", servo: "down" },
+    ArrowLeft: { drive: "left", servo: "left" },
+    ArrowRight: { drive: "right", servo: "right" },
+};
+
+window.addEventListener("keydown", (e) => {
+    if (e.repeat || !KEY_MAP[e.key]) return;
+    e.preventDefault();
+    pressedKeys.add(e.key);
+    const cmd = KEY_MAP[e.key][keyboardMode];
+    if (keyboardMode === "drive") {
+        post("/move", { direction: cmd });
+    } else {
+        post("/servo", { direction: cmd });
+    }
+});
+
+window.addEventListener("keyup", (e) => {
+    if (!KEY_MAP[e.key]) return;
+    e.preventDefault();
+    pressedKeys.delete(e.key);
+    if (keyboardMode === "drive") {
+        post("/move", { direction: "stop" });
+    } else {
+        post("/servo", { direction: "stop" });
+    }
+});
 
 setInterval(pollTelemetry, 250);
 pollTelemetry();
