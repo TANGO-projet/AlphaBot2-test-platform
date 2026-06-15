@@ -99,6 +99,20 @@ main.grid {
 .dpad .right { grid-column: 3; grid-row: 2; }
 .dpad .down { grid-column: 2; grid-row: 3; }
 
+.kb-mode {
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--accent-2);
+    margin-bottom: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 8px;
+    background: #1c3d23;
+}
+.kb-mode.inactive {
+    color: var(--muted);
+    background: transparent;
+}
+
 label { display: block; color: var(--muted); font-size: 0.85rem; margin-top: 0.75rem; }
 input[type="range"] { width: 100%; }
 

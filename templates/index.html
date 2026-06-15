@@ -24,10 +24,11 @@
         <!-- Manual control -->
         <section class="card">
             <h2>Manual Drive</h2>
+            <div class="kb-mode" id="drive-kb-mode">⌨️ arrow keys: <strong>drive</strong></div>
             <div class="dpad" id="dpad">
                 <button data-dir="forward" class="arrow up">▲</button>
                 <button data-dir="left" class="arrow left">◀</button>
-                <button data-dir="stop" class="arrow center">●</button>
+                <button data-dir="stop" class="arrow center" id="drive-center">●</button>
                 <button data-dir="right" class="arrow right">▶</button>
                 <button data-dir="backward" class="arrow down">▼</button>
             </div>
@@ -41,10 +42,11 @@
         <!-- Servo -->
         <section class="card">
             <h2>Pan / Tilt</h2>
+            <div class="kb-mode inactive" id="servo-kb-mode">⌨️ arrow keys: <strong>pan/tilt</strong></div>
             <div class="dpad small">
                 <button data-servo="up" class="arrow up">▲</button>
                 <button data-servo="left" class="arrow left">◀</button>
-                <button data-servo="center" class="arrow center">◎</button>
+                <button data-servo="center" class="arrow center" id="servo-center">◎</button>
                 <button data-servo="right" class="arrow right">▶</button>
                 <button data-servo="down" class="arrow down">▼</button>
             </div>
