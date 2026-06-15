@@ -81,6 +81,12 @@ Run with `sudo` (simplest, but not recommended long-term):
 sudo $(which python) run.py --host 0.0.0.0 --port 5000
 ```
 
+When using `sudo`, put environment variables **after** `sudo` so they are preserved:
+
+```bash
+sudo ALPHABOT_CAMERA_BACKEND=picamera2 $(which python) run.py --host 0.0.0.0 --port 5000
+```
+
 ### Recommended fix
 
 Add your user to the `gpio` and `i2c` groups, then log out and back in (or reboot):
@@ -136,7 +142,17 @@ Install picamera2 (Bookworm / Bullseye):
 sudo apt install -y python3-picamera2
 ```
 
-Then run the app. If picamera2 still fails, test it standalone:
+**Important:** `python3-picamera2` is installed as a system package. If you run the app inside a virtualenv, that venv must be able to see system packages. Either recreate it with system site-packages:
+
+```bash
+rm -rf venv
+python3 -m venv venv --system-site-packages
+source venv/bin/activate
+pip install -r requirements.txt
+pip install opencv-python-headless numpy
+```
+
+Or test picamera2 with the system Python:
 
 ```bash
 python3 -c "from picamera2 import Picamera2; p=Picamera2(); p.start(); p.capture_array(); print('OK')"
