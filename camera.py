@@ -2,9 +2,14 @@
 
 Tries modern Raspberry Pi libraries first, then OpenCV, and finally falls back
 to a generated test pattern so the UI works everywhere.
+
+Environment variables:
+  ALPHABOT_CAMERA_BACKEND=picamera2|opencv|mock  Force a specific backend.
+  ALPHABOT_CAMERA_INDEX=0,1,2,...                Force an OpenCV device index.
 """
 from __future__ import annotations
 
+import os
 import time
 import threading
 from typing import Generator
@@ -50,8 +55,11 @@ class Camera:
         self._picam = None
         self.error: str | None = None
 
-        # 1) Try picamera2 first on Raspberry Pi.
-        if HAVE_PICAMERA2:
+        forced_backend = os.environ.get("ALPHABOT_CAMERA_BACKEND", "").lower()
+        forced_index = os.environ.get("ALPHABOT_CAMERA_INDEX", "")
+
+        # 1) Try picamera2 first on Raspberry Pi (unless OpenCV is forced).
+        if forced_backend in ("", "picamera2") and HAVE_PICAMERA2:
             try:
                 self._picam = Picamera2()
                 cfg = self._picam.create_video_configuration(
@@ -64,8 +72,9 @@ class Camera:
                 self._source = "picamera2"
                 time.sleep(0.2)
             except Exception as exc:
-                self.error = f"picamera2 failed: {exc}"
-                print(f"[Camera] {self.error}")
+                err = f"picamera2 failed: {exc}"
+                print(f"[Camera] {err}")
+                self.error = err
                 try:
                     if self._picam:
                         self._picam.stop()
@@ -74,25 +83,39 @@ class Camera:
                 self._picam = None
 
         # 2) Fall back to OpenCV (USB webcam / desktop / Pi without picamera2).
-        if self._source == "mock" and HAVE_CV2:
-            try:
-                # On the Pi, V4L2 backend is usually index 0.
-                self._capture = cv2.VideoCapture(0)
-                self._capture.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-                self._capture.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-                self._capture.set(cv2.CAP_PROP_FPS, self.FPS)
-                ok, _ = self._capture.read()
-                if self._capture.isOpened() and ok:
-                    self._source = "opencv"
-                    self.error = None
-                else:
-                    raise RuntimeError("OpenCV camera index 0 is not returning frames")
-            except Exception as exc:
-                self.error = (self.error or "") + f"; OpenCV failed: {exc}".lstrip("; ")
-                print(f"[Camera] {self.error}")
-                if self._capture:
-                    self._capture.release()
-                self._capture = None
+        if self._source == "mock" and forced_backend in ("", "opencv") and HAVE_CV2:
+            indices = []
+            if forced_index:
+                indices = [int(x) for x in forced_index.split(",")]
+            else:
+                indices = list(range(4))  # Try /dev/video0 .. /dev/video3
+
+            for idx in indices:
+                cap = None
+                try:
+                    print(f"[Camera] Trying OpenCV index {idx}...")
+                    cap = cv2.VideoCapture(idx)
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+                    cap.set(cv2.CAP_PROP_FPS, self.FPS)
+                    ok, _ = cap.read()
+                    if cap.isOpened() and ok:
+                        self._capture = cap
+                        self._source = f"opencv:{idx}"
+                        self.error = None
+                        break
+                    else:
+                        cap.release()
+                except Exception as exc:
+                    print(f"[Camera] OpenCV index {idx} error: {exc}")
+                    if cap:
+                        cap.release()
+
+            if self._source == "mock":
+                tried = ",".join(str(i) for i in indices)
+                err = f"OpenCV failed: no working camera on indices {tried}"
+                print(f"[Camera] {err}")
+                self.error = (self.error or "") + "; " + err if self.error else err
 
         if self._source == "mock":
             print("[Camera] Using mock test pattern.")
