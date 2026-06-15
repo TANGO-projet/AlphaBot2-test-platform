@@ -9,7 +9,7 @@ from flask import Flask, Response, render_template, jsonify, request
 
 from controller import RobotController
 from camera import Camera
-from hardware import IS_RPI, GPIO_AVAILABLE, NEOPIXEL_AVAILABLE
+from hardware import IS_RPI, GPIO_AVAILABLE, I2C_AVAILABLE, NEOPIXEL_AVAILABLE
 
 app = Flask(__name__)
 robot = RobotController()
@@ -18,6 +18,7 @@ camera = Camera()
 print(
     f"[AlphaBot2] Platform: {'Raspberry Pi' if IS_RPI else 'PC/mock'} | "
     f"GPIO: {'real' if GPIO_AVAILABLE else 'mock'} | "
+    f"I2C: {'real' if I2C_AVAILABLE else 'mock'} | "
     f"NeoPixel: {'real' if NEOPIXEL_AVAILABLE else 'mock'} | "
     f"Camera: {camera.source}",
     file=sys.stderr,
