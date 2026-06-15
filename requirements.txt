@@ -1,0 +1,8 @@
+Flask>=2.0
+
+# Optional camera backends (at least one recommended):
+# On Raspberry Pi:
+#   picamera2
+# On desktop / generic Linux for USB webcams:
+#   opencv-python-headless
+#   numpy
