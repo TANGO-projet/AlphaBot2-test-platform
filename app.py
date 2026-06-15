@@ -180,6 +180,7 @@ def api_camera_info():
         "source": camera.source,
         "width": camera.width,
         "height": camera.height,
+        "error": camera.error,
     })
 
 

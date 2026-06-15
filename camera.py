@@ -5,7 +5,6 @@ to a generated test pattern so the UI works everywhere.
 """
 from __future__ import annotations
 
-import io
 import time
 import threading
 from typing import Generator
@@ -17,19 +16,20 @@ except Exception:
     HAVE_NUMPY = False
     np = None  # type: ignore
 
-# Try picamera2 (modern Raspberry Pi OS)
-try:
-    from picamera2 import Picamera2
-    HAVE_PICAMERA2 = True
-except Exception:
-    HAVE_PICAMERA2 = False
-
-# Try OpenCV as a fallback / desktop option
+# Try OpenCV first; it is the most common camera backend on both desktop and Pi.
 try:
     import cv2
     HAVE_CV2 = True
 except Exception:
     HAVE_CV2 = False
+
+# Try picamera2 (modern Raspberry Pi OS).  We prefer it when available because
+# it integrates better with the official Pi camera modules.
+try:
+    from picamera2 import Picamera2
+    HAVE_PICAMERA2 = True
+except Exception:
+    HAVE_PICAMERA2 = False
 
 
 class Camera:
@@ -47,7 +47,10 @@ class Camera:
         self._running = True
         self._source = "mock"
         self._capture = None
+        self._picam = None
+        self.error: str | None = None
 
+        # 1) Try picamera2 first on Raspberry Pi.
         if HAVE_PICAMERA2:
             try:
                 self._picam = Picamera2()
@@ -56,24 +59,43 @@ class Camera:
                 )
                 self._picam.configure(cfg)
                 self._picam.start()
+                # Verify we can actually grab a frame.
+                self._picam.capture_array()
                 self._source = "picamera2"
-                # Give the sensor a moment to warm up.
-                time.sleep(0.5)
+                time.sleep(0.2)
             except Exception as exc:
-                print(f"picamera2 failed: {exc}, trying OpenCV...")
+                self.error = f"picamera2 failed: {exc}"
+                print(f"[Camera] {self.error}")
+                try:
+                    if self._picam:
+                        self._picam.stop()
+                except Exception:
+                    pass
                 self._picam = None
 
+        # 2) Fall back to OpenCV (USB webcam / desktop / Pi without picamera2).
         if self._source == "mock" and HAVE_CV2:
             try:
+                # On the Pi, V4L2 backend is usually index 0.
                 self._capture = cv2.VideoCapture(0)
                 self._capture.set(cv2.CAP_PROP_FRAME_WIDTH, width)
                 self._capture.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
                 self._capture.set(cv2.CAP_PROP_FPS, self.FPS)
-                if self._capture.isOpened():
+                ok, _ = self._capture.read()
+                if self._capture.isOpened() and ok:
                     self._source = "opencv"
+                    self.error = None
+                else:
+                    raise RuntimeError("OpenCV camera index 0 is not returning frames")
             except Exception as exc:
-                print(f"OpenCV failed: {exc}, using mock camera.")
+                self.error = (self.error or "") + f"; OpenCV failed: {exc}".lstrip("; ")
+                print(f"[Camera] {self.error}")
+                if self._capture:
+                    self._capture.release()
                 self._capture = None
+
+        if self._source == "mock":
+            print("[Camera] Using mock test pattern.")
 
         # Start capture thread.
         self._thread = threading.Thread(target=self._capture_loop, daemon=True)
@@ -93,20 +115,19 @@ class Camera:
                 else:
                     self._grab_mock()
             except Exception as exc:
-                print(f"Camera capture error: {exc}")
+                print(f"[Camera] capture error: {exc}")
                 self._grab_mock()
             time.sleep(1.0 / self.FPS)
 
-    def _encode_jpeg(self, array: np.ndarray) -> bytes:
+    def _encode_jpeg(self, array) -> bytes:
         if HAVE_CV2:
             _, buf = cv2.imencode(".jpg", array)
             return buf.tobytes()
-        # Pure-Python fallback (rarely used; OpenCV is widely available).
         return self._test_pattern()
 
     def _grab_picamera2(self):
         arr = self._picam.capture_array()
-        # picamera2 may return RGB or BGR depending on config; ensure BGR for OpenCV encode.
+        # picamera2 returns RGB; OpenCV's imencode expects BGR.
         if arr.shape[2] == 3 and HAVE_CV2:
             arr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
         with self._lock:
@@ -119,8 +140,7 @@ class Camera:
             return
         frame = cv2.resize(frame, (self.width, self.height))
         with self._lock:
-            _, buf = cv2.imencode(".jpg", frame)
-            self._frame = buf.tobytes()
+            self._frame = self._encode_jpeg(frame)
 
     def _grab_mock(self):
         with self._lock:
@@ -206,12 +226,12 @@ class Camera:
     def stop(self):
         self._running = False
         try:
-            if self._source == "picamera2" and self._picam:
+            if self._picam:
                 self._picam.stop()
         except Exception:
             pass
         try:
-            if self._source == "opencv" and self._capture:
+            if self._capture:
                 self._capture.release()
         except Exception:
             pass

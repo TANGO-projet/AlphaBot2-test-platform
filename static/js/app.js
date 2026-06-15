@@ -123,7 +123,13 @@ async function updateCameraInfo() {
     try {
         const info = await fetch(API + "/camera/info").then(r => r.json());
         const el = document.getElementById("camera-info");
-        el.textContent = `Source: ${info.source} (${info.width}x${info.height})`;
+        if (info.error) {
+            el.textContent = `Source: ${info.source} — ${info.error}`;
+            el.style.color = "#ff453a";
+        } else {
+            el.textContent = `Source: ${info.source} (${info.width}x${info.height})`;
+            el.style.color = "";
+        }
     } catch (err) {
         document.getElementById("camera-info").textContent = "Camera info unavailable";
     }
