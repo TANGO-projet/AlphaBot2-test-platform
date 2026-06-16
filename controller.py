@@ -1,6 +1,7 @@
 """High-level robot controller and autonomous behaviours."""
 from __future__ import annotations
 
+import os
 import time
 import threading
 from enum import Enum
@@ -30,7 +31,19 @@ class RobotController:
         self.pan_tilt = PanTilt()
         self.ultrasonic = UltrasonicRanger()
         self.ir_obstacle = InfraredObstacle()
-        self.tr_sensor = TRSensor()
+
+        # Some AlphaBot2 boards wire the 5 TR sensors to ADC channels 0..4
+        # instead of the WaveShare default 1..5.  Allow overriding via env var.
+        channel_map_env = os.environ.get("ALPHABOT_TR_CHANNELS", "")
+        channel_map = None
+        if channel_map_env:
+            try:
+                channel_map = [int(x.strip()) for x in channel_map_env.split(",")]
+                print(f"[AlphaBot2] TR sensor channel map: {channel_map}")
+            except Exception as exc:
+                print(f"[AlphaBot2] Invalid ALPHABOT_TR_CHANNELS: {exc}")
+
+        self.tr_sensor = TRSensor(channel_map=channel_map)
         self.leds = RGBLeds()
         self.buzzer = Buzzer()
         self.ir_remote = IRRemote()
@@ -43,7 +56,12 @@ class RobotController:
         self.telemetry = {
             "distance": 0.0,
             "ir_obstacle": {"left": False, "right": False},
-            "tr_sensor": {"position": 0, "values": [0] * 5},
+            "tr_sensor": {
+                "position": 0,
+                "values": [0] * 5,
+                "raw": [0] * 8,
+                "channel_map": self.tr_sensor.channel_map,
+            },
             "ir_remote": {"code": None, "name": None},
             "demo": self.demo_mode.value,
             "motor_speed": 50,
@@ -68,12 +86,18 @@ class RobotController:
         distance = self.ultrasonic.distance()
         ir = self.ir_obstacle.read()
         position, values = self.tr_sensor.read_line()
+        raw = self.tr_sensor.analog_read_all()
         remote = self.ir_remote.recent_key(timeout=0.5)
         with self._telemetry_lock:
             self.telemetry.update({
                 "distance": distance,
                 "ir_obstacle": ir,
-                "tr_sensor": {"position": position, "values": values},
+                "tr_sensor": {
+                    "position": position,
+                    "values": values,
+                    "raw": raw,
+                    "channel_map": self.tr_sensor.channel_map,
+                },
                 "ir_remote": remote,
                 "demo": self.demo_mode.value,
                 "motor_speed": self.robot.PA,
