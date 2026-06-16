@@ -80,16 +80,26 @@ class InfraredObstacle:
 
 
 class TRSensor:
-    """5-channel analog line-tracking sensor read through an SPI-like bit-bang."""
+    """5-channel analog line-tracking sensor read through an SPI-like bit-bang.
+
+    The WaveShare examples read channels 1..5 of the ADC and discard channel 0.
+    Some AlphaBot2 boards wire the sensors to channels 0..4 instead.  Use the
+    *channel_map* parameter to match your hardware.
+    """
 
     def __init__(self, num_sensors: int = 5, cs: int = 5, clock: int = 25,
-                 address: int = 24, data_out: int = 23, button: int = 7):
+                 address: int = 24, data_out: int = 23, button: int = 7,
+                 channel_map: List[int] | None = None):
         self.numSensors = num_sensors
         self.CS = cs
         self.Clock = clock
         self.Address = address
         self.DataOut = data_out
         self.Button = button
+
+        # Default to the original WaveShare mapping (channels 1..5).
+        self.channel_map = channel_map or list(range(1, num_sensors + 1))
+        self._max_channel = max(self.channel_map)
 
         self.calibratedMin = [0] * self.numSensors
         self.calibratedMax = [1023] * self.numSensors
@@ -103,17 +113,17 @@ class TRSensor:
         GPIO.setup(self.DataOut, GPIO.IN, GPIO.PUD_UP)
         GPIO.setup(self.Button, GPIO.IN, GPIO.PUD_UP)
 
-    def analog_read(self) -> List[int]:
-        """Read raw sensor values for all channels."""
+    def analog_read_all(self) -> List[int]:
+        """Read all ADC channels up to the highest mapped channel."""
         if not IS_RPI:
             # Simulate a line under the middle sensor.
-            base = [random.randint(50, 200) for _ in range(self.numSensors)]
+            base = [random.randint(50, 200) for _ in range(self._max_channel + 1)]
             mid = self.numSensors // 2
-            base[mid] = random.randint(850, 1023)
+            base[self.channel_map[mid]] = random.randint(850, 1023)
             return base
 
-        value = [0] * (self.numSensors + 1)
-        for j in range(self.numSensors + 1):
+        value = [0] * (self._max_channel + 1)
+        for j in range(self._max_channel + 1):
             GPIO.output(self.CS, GPIO.LOW)
             for i in range(8):
                 if i < 4:
@@ -135,9 +145,14 @@ class TRSensor:
             time.sleep(0.0001)
             GPIO.output(self.CS, GPIO.HIGH)
 
-        for i in range(self.numSensors + 1):
+        for i in range(len(value)):
             value[i] >>= 2
-        return value[1:]
+        return value
+
+    def analog_read(self) -> List[int]:
+        """Read raw sensor values in physical left-to-right order."""
+        all_channels = self.analog_read_all()
+        return [all_channels[ch] for ch in self.channel_map]
 
     def calibrate(self) -> None:
         """Update calibration min/max by sampling the sensors."""
