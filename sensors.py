@@ -89,7 +89,9 @@ class TRSensor:
 
     def __init__(self, num_sensors: int = 5, cs: int = 5, clock: int = 25,
                  address: int = 24, data_out: int = 23, button: int = 7,
-                 channel_map: List[int] | None = None):
+                 channel_map: List[int] | None = None,
+                 samples: int = 1, ema_alpha: float = 0.0,
+                 on_line_threshold: int = 200, noise_threshold: int = 50):
         self.numSensors = num_sensors
         self.CS = cs
         self.Clock = clock
@@ -100,6 +102,13 @@ class TRSensor:
         # Default to the original WaveShare mapping (channels 1..5).
         self.channel_map = channel_map or list(range(1, num_sensors + 1))
         self._max_channel = max(self.channel_map)
+
+        # Averaging / filtering options.
+        self.samples = max(1, samples)
+        self.ema_alpha = max(0.0, min(1.0, ema_alpha))
+        self.on_line_threshold = on_line_threshold
+        self.noise_threshold = noise_threshold
+        self._ema = [None] * (self._max_channel + 1)
 
         self.calibratedMin = [0] * self.numSensors
         self.calibratedMax = [1023] * self.numSensors
@@ -114,7 +123,11 @@ class TRSensor:
         GPIO.setup(self.Button, GPIO.IN, GPIO.PUD_UP)
 
     def analog_read_all(self) -> List[int]:
-        """Read all ADC channels up to the highest mapped channel."""
+        """Read all ADC channels up to the highest mapped channel.
+
+        Applies sample averaging and an optional exponential moving average
+        (low-pass filter) to reduce noise.
+        """
         if not IS_RPI:
             # Simulate a line under the middle sensor.
             base = [random.randint(50, 200) for _ in range(self._max_channel + 1)]
@@ -122,32 +135,49 @@ class TRSensor:
             base[self.channel_map[mid]] = random.randint(850, 1023)
             return base
 
-        value = [0] * (self._max_channel + 1)
-        for j in range(self._max_channel + 1):
-            GPIO.output(self.CS, GPIO.LOW)
-            for i in range(8):
-                if i < 4:
-                    bit = (j >> (3 - i)) & 0x01
-                    GPIO.output(self.Address, GPIO.HIGH if bit else GPIO.LOW)
-                else:
-                    GPIO.output(self.Address, GPIO.LOW)
-                value[j] <<= 1
-                if GPIO.input(self.DataOut):
-                    value[j] |= 0x01
-                GPIO.output(self.Clock, GPIO.HIGH)
-                GPIO.output(self.Clock, GPIO.LOW)
-            for _ in range(4):
-                value[j] <<= 1
-                if GPIO.input(self.DataOut):
-                    value[j] |= 0x01
-                GPIO.output(self.Clock, GPIO.HIGH)
-                GPIO.output(self.Clock, GPIO.LOW)
-            time.sleep(0.0001)
-            GPIO.output(self.CS, GPIO.HIGH)
+        # Average multiple ADC samples.
+        accum = [0] * (self._max_channel + 1)
+        for _ in range(self.samples):
+            value = [0] * (self._max_channel + 1)
+            for j in range(self._max_channel + 1):
+                GPIO.output(self.CS, GPIO.LOW)
+                for i in range(8):
+                    if i < 4:
+                        bit = (j >> (3 - i)) & 0x01
+                        GPIO.output(self.Address, GPIO.HIGH if bit else GPIO.LOW)
+                    else:
+                        GPIO.output(self.Address, GPIO.LOW)
+                    value[j] <<= 1
+                    if GPIO.input(self.DataOut):
+                        value[j] |= 0x01
+                    GPIO.output(self.Clock, GPIO.HIGH)
+                    GPIO.output(self.Clock, GPIO.LOW)
+                for _ in range(4):
+                    value[j] <<= 1
+                    if GPIO.input(self.DataOut):
+                        value[j] |= 0x01
+                    GPIO.output(self.Clock, GPIO.HIGH)
+                    GPIO.output(self.Clock, GPIO.LOW)
+                time.sleep(0.0001)
+                GPIO.output(self.CS, GPIO.HIGH)
 
-        for i in range(len(value)):
-            value[i] >>= 2
-        return value
+            for i in range(len(value)):
+                value[i] >>= 2
+                accum[i] += value[i]
+
+        result = [a // self.samples for a in accum]
+
+        # Optional exponential moving average (low-pass filter).
+        if self.ema_alpha > 0:
+            for i in range(len(result)):
+                if self._ema[i] is None:
+                    self._ema[i] = result[i]
+                else:
+                    self._ema[i] = int(
+                        self.ema_alpha * result[i] + (1 - self.ema_alpha) * self._ema[i]
+                    )
+            return list(self._ema)
+        return result
 
     def analog_read(self) -> List[int]:
         """Read raw sensor values in physical left-to-right order."""
@@ -197,9 +227,9 @@ class TRSensor:
             value = sensor_values[i]
             if white_line:
                 value = 1000 - value
-            if value > 200:
+            if value > self.on_line_threshold:
                 on_line = 1
-            if value > 50:
+            if value > self.noise_threshold:
                 avg += value * (i * 1000)
                 total += value
 
