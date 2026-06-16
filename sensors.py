@@ -82,9 +82,14 @@ class InfraredObstacle:
 class TRSensor:
     """5-channel analog line-tracking sensor read through an SPI-like bit-bang.
 
-    The WaveShare examples read channels 1..5 of the ADC and discard channel 0.
-    Some AlphaBot2 boards wire the sensors to channels 0..4 instead.  Use the
-    *channel_map* parameter to match your hardware.
+    This implementation follows the original WaveShare example: the ADC is read
+    with a one-sample delay, so sending address N returns the conversion for
+    ADC channel N-1.  A dummy transaction at address 0 primes the converter,
+    then the sensor channels are read in order.
+
+    *channel_map* lists the ADC channels (0-based) for the physical sensors in
+    left-to-right order.  The default ``[0, 1, 2, 3, 4]`` matches the original
+    demo files.  If your board wires the sensors differently, change the map.
     """
 
     def __init__(self, num_sensors: int = 5, cs: int = 5, clock: int = 25,
@@ -99,8 +104,8 @@ class TRSensor:
         self.DataOut = data_out
         self.Button = button
 
-        # Default to the original WaveShare mapping (channels 1..5).
-        self.channel_map = channel_map or list(range(1, num_sensors + 1))
+        # Default matches the original WaveShare demo: ADC channels 0..4.
+        self.channel_map = channel_map or list(range(num_sensors))
         self._max_channel = max(self.channel_map)
 
         # Averaging / filtering options.
@@ -108,7 +113,8 @@ class TRSensor:
         self.ema_alpha = max(0.0, min(1.0, ema_alpha))
         self.on_line_threshold = on_line_threshold
         self.noise_threshold = noise_threshold
-        self._ema = [None] * (self._max_channel + 1)
+        # EMA state is stored per transaction sample (num_sensors + 1 values).
+        self._ema = [None] * (num_sensors + 1)
 
         self.calibratedMin = [0] * self.numSensors
         self.calibratedMax = [1023] * self.numSensors
@@ -122,28 +128,22 @@ class TRSensor:
         GPIO.setup(self.DataOut, GPIO.IN, GPIO.PUD_UP)
         GPIO.setup(self.Button, GPIO.IN, GPIO.PUD_UP)
 
-    def analog_read_all(self) -> List[int]:
-        """Read all ADC channels up to the highest mapped channel.
+    def _read_addresses(self, addresses: List[int]) -> List[int]:
+        """Low-level SPI-like read for a list of channel addresses.
 
-        Applies sample averaging and an optional exponential moving average
-        (low-pass filter) to reduce noise.
+        Returns the raw transaction values.  Due to the one-sample delay in the
+        ADC, value[i] corresponds to the conversion requested by addresses[i-1].
         """
-        if not IS_RPI:
-            # Simulate a line under the middle sensor.
-            base = [random.randint(50, 200) for _ in range(self._max_channel + 1)]
-            mid = self.numSensors // 2
-            base[self.channel_map[mid]] = random.randint(850, 1023)
-            return base
+        n = len(addresses)
+        accum = [0] * n
 
-        # Average multiple ADC samples.
-        accum = [0] * (self._max_channel + 1)
         for _ in range(self.samples):
-            value = [0] * (self._max_channel + 1)
-            for j in range(self._max_channel + 1):
+            value = [0] * n
+            for j, addr in enumerate(addresses):
                 GPIO.output(self.CS, GPIO.LOW)
                 for i in range(8):
                     if i < 4:
-                        bit = (j >> (3 - i)) & 0x01
+                        bit = (addr >> (3 - i)) & 0x01
                         GPIO.output(self.Address, GPIO.HIGH if bit else GPIO.LOW)
                     else:
                         GPIO.output(self.Address, GPIO.LOW)
@@ -161,7 +161,7 @@ class TRSensor:
                 time.sleep(0.0001)
                 GPIO.output(self.CS, GPIO.HIGH)
 
-            for i in range(len(value)):
+            for i in range(n):
                 value[i] >>= 2
                 accum[i] += value[i]
 
@@ -169,7 +169,7 @@ class TRSensor:
 
         # Optional exponential moving average (low-pass filter).
         if self.ema_alpha > 0:
-            for i in range(len(result)):
+            for i in range(n):
                 if self._ema[i] is None:
                     self._ema[i] = result[i]
                 else:
@@ -178,6 +178,31 @@ class TRSensor:
                     )
             return list(self._ema)
         return result
+
+    def analog_read_all(self) -> List[int]:
+        """Return ADC readings indexed by ADC channel number.
+
+        Only the channels listed in *channel_map* are populated; others are 0.
+        This is useful for telemetry/debugging.
+        """
+        if not IS_RPI:
+            # Simulate a line under the middle sensor.
+            base = [0] * (self._max_channel + 1)
+            for ch in range(self._max_channel + 1):
+                base[ch] = random.randint(50, 200)
+            mid = self.numSensors // 2
+            base[self.channel_map[mid]] = random.randint(850, 1023)
+            return base
+
+        # Send dummy (addr 0) followed by each mapped channel + 1 to account for
+        # the one-sample delay in the ADC.
+        addresses = [0] + [ch + 1 for ch in self.channel_map]
+        raw = self._read_addresses(addresses)
+        # raw[i+1] is the conversion for ADC channel channel_map[i].
+        all_channels = [0] * (self._max_channel + 1)
+        for i, ch in enumerate(self.channel_map):
+            all_channels[ch] = raw[i + 1]
+        return all_channels
 
     def analog_read(self) -> List[int]:
         """Read raw sensor values in physical left-to-right order."""
