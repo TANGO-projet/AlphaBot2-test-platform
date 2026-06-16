@@ -185,6 +185,18 @@ ALPHABOT_CAMERA_BACKEND=opencv ALPHABOT_CAMERA_INDEX=0 python run.py
 ALPHABOT_CAMERA_BACKEND=mock python run.py
 ```
 
+## Line sensor (TRSensor) troubleshooting
+
+The telemetry panel shows the active ADC channel map (`TR channels`) and the raw ADC readings (`TR raw`).
+
+The default mapping follows the original WaveShare examples: sensors are read from ADC channels `1,2,3,4,5`. Some AlphaBot2 boards wire them to channels `0,1,2,3,4` instead. If only one sensor responds or the values seem mapped to the wrong physical sensor, try:
+
+```bash
+ALPHABOT_TR_CHANNELS=0,1,2,3,4 python run.py
+```
+
+To find the correct mapping, touch each sensor one by one and watch the `TR raw` values in the telemetry panel. The channel that drops to a low value corresponds to the sensor you are touching. Then set `ALPHABOT_TR_CHANNELS` to the left-to-right order of your sensors.
+
 ## Project layout
 
 ```
