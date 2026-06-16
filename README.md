@@ -189,13 +189,13 @@ ALPHABOT_CAMERA_BACKEND=mock python run.py
 
 The telemetry panel shows the active ADC channel map (`TR channels`) and the raw ADC readings (`TR raw`).
 
-The default mapping follows the original WaveShare examples: sensors are read from ADC channels `1,2,3,4,5`. Some AlphaBot2 boards wire them to channels `0,1,2,3,4` instead. If only one sensor responds or the values seem mapped to the wrong physical sensor, try:
+The default mapping follows the original WaveShare demo files: the five physical sensors are read from ADC channels `0,1,2,3,4` (the demo sends addresses `0..5` and discards the first result because the ADC has a one-sample delay).
+
+If only one sensor responds or the values seem mapped to the wrong physical sensor, your board may use a different wiring. Touch each sensor one by one and watch the `TR raw` values in the telemetry panel. The channel that changes corresponds to the sensor you are touching. Then set `ALPHABOT_TR_CHANNELS` to the left-to-right ADC channel order of your sensors, for example:
 
 ```bash
-ALPHABOT_TR_CHANNELS=0,1,2,3,4 python run.py
+ALPHABOT_TR_CHANNELS=1,2,3,4,5 python run.py
 ```
-
-To find the correct mapping, touch each sensor one by one and watch the `TR raw` values in the telemetry panel. The channel that drops to a low value corresponds to the sensor you are touching. Then set `ALPHABOT_TR_CHANNELS` to the left-to-right order of your sensors.
 
 ### Noise / sensitivity tuning
 
