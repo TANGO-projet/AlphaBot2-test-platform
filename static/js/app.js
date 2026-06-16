@@ -177,6 +177,8 @@ async function pollTelemetry() {
         document.getElementById("ir-r").classList.toggle("on", data.ir_obstacle.right);
         document.getElementById("line-pos").textContent = data.tr_sensor.position;
         updateBars(data.tr_sensor.values);
+        document.getElementById("tr-channels").textContent = JSON.stringify(data.tr_sensor.channel_map);
+        document.getElementById("tr-raw").textContent = data.tr_sensor.raw ? data.tr_sensor.raw.join(", ") : "--";
         document.getElementById("ir-key").textContent = data.ir_remote.name || "--";
         document.getElementById("current-demo").textContent = data.demo;
         speedInput.value = data.motor_speed;
