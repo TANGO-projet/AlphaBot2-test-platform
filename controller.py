@@ -43,7 +43,30 @@ class RobotController:
             except Exception as exc:
                 print(f"[AlphaBot2] Invalid ALPHABOT_TR_CHANNELS: {exc}")
 
-        self.tr_sensor = TRSensor(channel_map=channel_map)
+        def _env_int(name: str, default: int) -> int:
+            try:
+                return int(os.environ.get(name, default))
+            except Exception:
+                return default
+
+        def _env_float(name: str, default: float) -> float:
+            try:
+                return float(os.environ.get(name, default))
+            except Exception:
+                return default
+
+        self.tr_sensor = TRSensor(
+            channel_map=channel_map,
+            samples=_env_int("ALPHABOT_TR_SAMPLES", 1),
+            ema_alpha=_env_float("ALPHABOT_TR_EMA", 0.0),
+            on_line_threshold=_env_int("ALPHABOT_TR_ON_LINE", 200),
+            noise_threshold=_env_int("ALPHABOT_TR_NOISE", 50),
+        )
+        print(
+            f"[AlphaBot2] TR sensor tuning: samples={self.tr_sensor.samples}, "
+            f"ema={self.tr_sensor.ema_alpha}, on_line={self.tr_sensor.on_line_threshold}, "
+            f"noise={self.tr_sensor.noise_threshold}"
+        )
         self.leds = RGBLeds()
         self.buzzer = Buzzer()
         self.ir_remote = IRRemote()
