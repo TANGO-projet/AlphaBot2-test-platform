@@ -197,6 +197,31 @@ ALPHABOT_TR_CHANNELS=0,1,2,3,4 python run.py
 
 To find the correct mapping, touch each sensor one by one and watch the `TR raw` values in the telemetry panel. The channel that drops to a low value corresponds to the sensor you are touching. Then set `ALPHABOT_TR_CHANNELS` to the left-to-right order of your sensors.
 
+### Noise / sensitivity tuning
+
+If the raw values jump around (e.g. 959-963) or the line follow demo reacts to noise, you can tune the sensor in software:
+
+```bash
+# Average 5 ADC samples per reading and apply a light low-pass filter
+ALPHABOT_TR_SAMPLES=5 ALPHABOT_TR_EMA=0.3 python run.py
+
+# Raise the noise floor so small fluctuations are ignored
+ALPHABOT_TR_NOISE=100 python run.py
+
+# Require a stronger line signal before considering a sensor "on the line"
+ALPHABOT_TR_ON_LINE=300 python run.py
+```
+
+Environment variables:
+* `ALPHABOT_TR_SAMPLES` — how many ADC samples to average (default 1)
+* `ALPHABOT_TR_EMA` — exponential moving average factor 0..1 (default 0, i.e. off)
+* `ALPHABOT_TR_NOISE` — minimum calibrated value used in the line-position average (default 50)
+* `ALPHABOT_TR_ON_LINE` — minimum calibrated value to consider a sensor over the line (default 200)
+
+### Hardware tuning
+
+The TR sensor module also has small potentiometers (one per sensor). Turning them adjusts the IR LED brightness / comparator threshold. If the raw values are always high and barely change when you move the sensor over a line, try adjusting the pots slowly while watching the `TR raw` telemetry until you get a clear swing between light and dark surfaces.
+
 ## Project layout
 
 ```
